@@ -24,9 +24,9 @@ class Lint(object):
 
     def _get_template_path(self, test):
         if self._path:
-            return '%s/templates/%s' % (self._path, self._config['tests'][test]['template_file'])
+            return f"{self._path}/templates/{self._config['tests'][test]['template_file']}"
         else:
-            return 'templates/%s' % (self._config['tests'][test]['template_file'])
+            return f"templates/{self._config['tests'][test]['template_file']}"
 
     def _get_test_regions(self, test):
         if 'regions' in self._config['tests'][test].keys():
@@ -40,7 +40,9 @@ class Lint(object):
             return regions
         supported = set(regions).intersection(lint_regions)
         unsupported = set(regions).difference(lint_regions)
-        print(PrintMsg.ERROR + "The following regions are not supported by cfn-python-lint and will not be linted %s" % unsupported)
+        print(
+            f"{PrintMsg.ERROR}The following regions are not supported by cfn-python-lint and will not be linted {unsupported}"
+        )
         return list(supported)
 
     @staticmethod
@@ -49,19 +51,21 @@ class Lint(object):
             return cfnlint.decode.cfn_yaml.load(template_path)
         except ScannerError as e:
             if not quiet:
-                print(PrintMsg.ERROR + 'Linter failed to load template %s "%s" line %s, column %s' % (
-                      template_path, e.problem, e.problem_mark.line, e.problem_mark.column))
+                print(
+                    f'{PrintMsg.ERROR}Linter failed to load template {template_path} "{e.problem}" line {e.problem_mark.line}, column {e.problem_mark.column}'
+                )
         except FileNotFoundError as e:
             if not quiet:
-                print(PrintMsg.ERROR + 'Linter failed to load template %s "%s"' % (template_path, str(e)))
+                print(
+                    f'{PrintMsg.ERROR}Linter failed to load template {template_path} "{str(e)}"'
+                )
 
     def _lint(self):
         lints = {}
         templates = {}
 
         for test in self._config['tests'].keys():
-            lints[test] = {}
-            lints[test]['regions'] = self._get_test_regions(test)
+            lints[test] = {'regions': self._get_test_regions(test)}
             template_file = self._get_template_path(test)
             lints[test]['template_file'] = template_file
             if template_file not in templates.keys():
@@ -70,8 +74,7 @@ class Lint(object):
             templates[template_file].add(template_file)
             lint_errors = set()
             for t in templates[template_file]:
-                template = self._parse_template(t, quiet=True)
-                if template:
+                if template := self._parse_template(t, quiet=True):
                     try:
                         lints[test]['results'][t] = cfnlint.core.run_checks(
                             t, template, self._rules, lints[test]['regions']
@@ -91,9 +94,9 @@ class Lint(object):
         for test in self.lints.keys():
             for t in self.lints[test]['results'].keys():
                 if len(self.lints[test]['results'][t]) == 0:
-                    print(PrintMsg.INFO + "Lint passed for test %s on template %s:" % (test, t))
+                    print(f"{PrintMsg.INFO}Lint passed for test {test} on template {t}:")
                 else:
-                    print(PrintMsg.ERROR + "Lint detected issues for test %s on template %s:" % (test, t))
+                    print(f"{PrintMsg.ERROR}Lint detected issues for test {test} on template {t}:")
                 for r in self.lints[test]['results'][t]:
                     print(self._format_message(r, test, t))
 
@@ -102,20 +105,20 @@ class Lint(object):
         sev = message[0]
         code = Lint._code_regex.findall(message)[0][:-1]
         path = message.split(" ")[-1]
-        line_no = ""
-        if len(path.split(":")) == 2:
-            line_no = path.split(":")[1]
-        prefix = "    line " + line_no + " [" + code + "] ["
+        line_no = path.split(":")[1] if len(path.split(":")) == 2 else ""
+        prefix = f"    line {line_no} [{code}] ["
         indent = "\n" + " " * (2 + len(prefix))
         message = indent.join(textwrap.wrap(" ".join(message.split(" ")[1:-2]), 141-(len(indent) + 11)))
         message = prefix + message
         if sev == 'E':
             return PrintMsg.ERROR + message
         elif sev == 'W':
-            if 'E' + message[1:] not in [r.__str__().lstrip('[') for r in self.lints[test]['results'][t]]:
+            if f'E{message[1:]}' not in [
+                r.__str__().lstrip('[') for r in self.lints[test]['results'][t]
+            ]:
                 return PrintMsg.INFO + message
         else:
-            return PrintMsg.DEBUG + "linter produced unkown output: " + message
+            return f"{PrintMsg.DEBUG}linter produced unkown output: {message}"
 
     def _get_child_templates(self, filename, children, parent_path=''):
         template = self._parse_template(filename)
@@ -138,7 +141,7 @@ class Lint(object):
                         child_name = '/'.join(template_url.split('/')[-2:])
             if child_name and not child_name.startswith('submodules/'):
                 if parent_path:
-                    child_name = "%s/%s" % (parent_path, child_name)
+                    child_name = f"{parent_path}/{child_name}"
                 children.add(child_name)
                 children.union(self._get_child_templates(child_name, children, parent_path=parent_path))
         return children

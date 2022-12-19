@@ -28,10 +28,10 @@ class ReportBuilder:
             extension = '.txt'
             if resource_type == 'cfnlog':
                 location = "{}-{}-{}{}".format(stack_name, region, 'cfnlogs', extension)
-                return str(location)
+                return location
             elif resource_type == 'resource_log':
                 location = "{}-{}-{}{}".format(stack_name, region, 'resources', extension)
-                return str(location)
+                return location
 
         def get_teststate(stackname, region):
             rstatus = None
@@ -54,7 +54,7 @@ class ReportBuilder:
             except TaskCatException:
                 raise
             except Exception as e:
-                print(PrintMsg.ERROR + "Error describing stack named [%s] " % stackname)
+                print(f"{PrintMsg.ERROR}Error describing stack named [{stackname}] ")
                 print(PrintMsg.DEBUG + str(e))
                 rstatus = 'MANUALLY_DELETED'
                 status_css = 'class=test-orange'
@@ -132,7 +132,7 @@ class ReportBuilder:
                                         text('')
 
                                 testname = test.get_test_name()
-                                print(PrintMsg.INFO + "(Generating Reports)")
+                                print(f"{PrintMsg.INFO}(Generating Reports)")
                                 print(PrintMsg.INFO + " - Processing {}".format(testname))
                                 for stack in test.get_test_stacks():
                                     print("Reporting on {}".format(str(stack['StackId'])))
@@ -182,8 +182,6 @@ class ReportBuilder:
                                         newline='\r\n',
                                         indent_text=True)
 
-            file = open(self.dashboard_filename, 'w')
-            file.write(html_output)
-            file.close()
-
+            with open(self.dashboard_filename, 'w') as file:
+                file.write(html_output)
             return html_output

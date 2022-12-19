@@ -38,10 +38,10 @@ class LambdaBuild(object):
 
     def _make_zip(self, name):
         try:
-            print(PrintMsg.INFO + "Zipping lambda function %s" % name)
-            output_path = "%s/%s" % (self.output_path, name)
+            print(f"{PrintMsg.INFO}Zipping lambda function {name}")
+            output_path = f"{self.output_path}/{name}"
             make_dir(output_path)
             os.chdir(name)
-            make_archive(output_path + "/" + self.zip_file_name, "zip", "./")
+            make_archive(f"{output_path}/{self.zip_file_name}", "zip", "./")
         finally:
             os.chdir(self.source_path)

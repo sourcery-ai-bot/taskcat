@@ -8,8 +8,8 @@ class PrintMsg:
     orange = '\x1b[0;30;43m'
     red = '\x1b[0;30;41m'
     rst_color = '\x1b[0m'
-    ERROR = '{}[ERROR  ]{} :'.format(red, rst_color)
-    DEBUG = '{}[DEBUG  ]{} :'.format(aqua, rst_color)
-    PASS = '{}[PASS   ]{} :'.format(green, rst_color)
-    FAIL = '{}[FAIL   ]{} :'.format(red, rst_color)
-    INFO = '{}[INFO   ]{} :'.format(orange, rst_color)
+    ERROR = f'{red}[ERROR  ]{rst_color} :'
+    DEBUG = f'{aqua}[DEBUG  ]{rst_color} :'
+    PASS = f'{green}[PASS   ]{rst_color} :'
+    FAIL = f'{red}[FAIL   ]{rst_color} :'
+    INFO = f'{orange}[INFO   ]{rst_color} :'

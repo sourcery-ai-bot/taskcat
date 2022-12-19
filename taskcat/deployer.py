@@ -173,11 +173,11 @@ class CFNAlchemist(object):
 
     def _set_excluded_key_prefixes(self):
         self._excluded_prefixes = [
-            '{}doc/'.format(self._target_key_prefix),
-            '{}pics/'.format(self._target_key_prefix),
-            '{}media/'.format(self._target_key_prefix),
-            '{}downloads/'.format(self._target_key_prefix),
-            '{}installers/'.format(self._target_key_prefix)
+            f'{self._target_key_prefix}doc/',
+            f'{self._target_key_prefix}pics/',
+            f'{self._target_key_prefix}media/',
+            f'{self._target_key_prefix}downloads/',
+            f'{self._target_key_prefix}installers/',
         ]
 
     def _get_excluded_key_prefixes(self):
@@ -214,11 +214,14 @@ class CFNAlchemist(object):
         s3_resource = boto_session.resource('s3')
         upload_bucket = s3_resource.Bucket(self._target_bucket_name)
 
-        self.logger.info("Gathering remote S3 bucket keys {}*".format(self._target_key_prefix))
-        remote_key_dict = {}
-        for obj in upload_bucket.objects.filter(Prefix='{}'.format(self._target_key_prefix)):
-            if any(x not in obj.key for x in self._get_excluded_key_prefixes()):
-                remote_key_dict[obj.key] = obj
+        self.logger.info(f"Gathering remote S3 bucket keys {self._target_key_prefix}*")
+        remote_key_dict = {
+            obj.key: obj
+            for obj in upload_bucket.objects.filter(
+                Prefix=f'{self._target_key_prefix}'
+            )
+            if any(x not in obj.key for x in self._get_excluded_key_prefixes())
+        }
         self.logger.debug(remote_key_dict.keys())
 
         # Gather file list
@@ -226,16 +229,20 @@ class CFNAlchemist(object):
         #       an output directory. We ensure that is not the case when parsing the args, but care must be taken
         #       when initializing all the properties of this class. If it's only an upload that's meant to happen
         #       without a previous rewrite, then output directory should never be set.
-        self.logger.info("Gathering local keys {}*".format(self._target_key_prefix))
-        if self._file_list:
-            file_list = self._file_list
-        else:
-            file_list = self._get_file_list(self._input_path)
-
-        local_key_dict = {}
-        for current_file in file_list:
-            local_key_dict[os.path.join(self._target_key_prefix, current_file.replace(self._input_path, '', 1).lstrip('\/')).replace('\\', '/')] = \
-                os.path.join(self._output_directory if self._output_directory and not self._dry_run else self._input_path, current_file.replace(self._input_path, '', 1).lstrip('\/'))
+        self.logger.info(f"Gathering local keys {self._target_key_prefix}*")
+        file_list = self._file_list or self._get_file_list(self._input_path)
+        local_key_dict = {
+            os.path.join(
+                self._target_key_prefix,
+                current_file.replace(self._input_path, '', 1).lstrip('\/'),
+            ).replace('\\', '/'): os.path.join(
+                self._output_directory
+                if self._output_directory and not self._dry_run
+                else self._input_path,
+                current_file.replace(self._input_path, '', 1).lstrip('\/'),
+            )
+            for current_file in file_list
+        }
         self.logger.debug(local_key_dict.keys())
 
         remote_to_local_diff = list(set(remote_key_dict.keys()) - set(local_key_dict.keys()))
@@ -246,33 +253,33 @@ class CFNAlchemist(object):
         self.logger.info("Keys in local but not in remote S3 bucket:")
         self.logger.info(local_to_remote_diff)
 
-        self.logger.info("Syncing objects to S3 bucket [{}]".format(self._target_bucket_name))
-        for _key in local_key_dict.keys():
+        self.logger.info(f"Syncing objects to S3 bucket [{self._target_bucket_name}]")
+        for _key, value in local_key_dict.items():
             if _key in remote_key_dict:
                 self.logger.debug("File [{0}] exists in S3 bucket [{1}]. Verifying MD5 checksum for difference.".format(_key, self._target_bucket_name))
                 s3_hash = remote_key_dict[_key].e_tag.strip('"')
                 local_hash = hashlib.md5(open(local_key_dict[_key], 'rb').read()).hexdigest()
                 self.logger.debug("S3 MD5 checksum (etag) [{0}]=>[{1}]".format(s3_hash, remote_key_dict[_key]))
-                self.logger.debug("Local MD5 checksum     [{0}]=>[{1}]".format(local_hash, local_key_dict[_key]))
-                if s3_hash != local_hash:
-                    if self._dry_run:
-                        self.logger.info("[WHAT IF DRY RUN]: UPDATE [{0}]".format(_key))
-                    else:
-                        self.logger.info("UPDATE [{0}]".format(_key))
-                        s3_resource.Object(self._target_bucket_name, _key).upload_file(local_key_dict[_key])
+                self.logger.debug(
+                    "Local MD5 checksum     [{0}]=>[{1}]".format(local_hash, value)
+                )
+                if s3_hash == local_hash:
+                    self.logger.debug(f"MD5 checksums are the same. Skipping [{_key}]")
+                elif self._dry_run:
+                    self.logger.info("[WHAT IF DRY RUN]: UPDATE [{0}]".format(_key))
                 else:
-                    self.logger.debug("MD5 checksums are the same. Skipping [{}]".format(_key))
-            else:
-                if self._dry_run:
-                    self.logger.info("[WHAT IF DRY RUN]: CREATE [{0}]".format(_key))
-                else:
-                    self.logger.info("CREATE [{0}]".format(_key))
-                    # Upload local file not present in S3 bucket
+                    self.logger.info("UPDATE [{0}]".format(_key))
                     s3_resource.Object(self._target_bucket_name, _key).upload_file(local_key_dict[_key])
+            elif self._dry_run:
+                self.logger.info("[WHAT IF DRY RUN]: CREATE [{0}]".format(_key))
+            else:
+                self.logger.info("CREATE [{0}]".format(_key))
+                # Upload local file not present in S3 bucket
+                s3_resource.Object(self._target_bucket_name, _key).upload_file(local_key_dict[_key])
 
         # clean up/remove remote keys that are not in local keys
         for _key in remote_to_local_diff:
-            if not any(x in _key for x in self._get_excluded_key_prefixes()):
+            if all(x not in _key for x in self._get_excluded_key_prefixes()):
                 if self._dry_run:
                     self.logger.info("[WHAT IF DRY RUN]: DELETE [{0}]".format(_key))
                 else:

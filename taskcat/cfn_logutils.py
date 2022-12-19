@@ -29,14 +29,11 @@ class CfnLogTools:
                 response = cfn_client.describe_stack_events(NextToken=response['NextToken'], StackName=stackname)
                 stack_events.extend(response['StackEvents'])
         except ClientError as e:
-            print("{} Error trying to get the events for stack [{}] in region [{}]\b {}".format(
-                PrintMsg.ERROR,
-                str(stackname),
-                str(region),
-                e
-            ))
-            # Commenting below line to avoid sudden exit on describe call failure. So that delete stack may continue.
-            # sys.exit()
+            print(
+                f"{PrintMsg.ERROR} Error trying to get the events for stack [{str(stackname)}] in region [{str(region)}]\b {e}"
+            )
+                # Commenting below line to avoid sudden exit on describe call failure. So that delete stack may continue.
+                # sys.exit()
 
         return stack_events
 
@@ -48,22 +45,22 @@ class CfnLogTools:
         :return: Event logs of the stack
         """
 
-        print(PrintMsg.INFO + "Collecting logs for " + stackname + "\"\n")
+        print(f"{PrintMsg.INFO}Collecting logs for {stackname}" + "\"\n")
         # Collect stack_events
         stack_events = self.get_cfn_stack_events(stackname, region)
         # Uncomment line for debug
         # pprint.pprint (stack_events)
         events = []
         for event in stack_events:
-            event_details = {'TimeStamp': event['Timestamp'],
-                             'ResourceStatus': event['ResourceStatus'],
-                             'ResourceType': event['ResourceType'],
-                             'LogicalResourceId': event['LogicalResourceId']}
-            if 'ResourceStatusReason' in event:
-                event_details['ResourceStatusReason'] = event['ResourceStatusReason']
-            else:
-                event_details['ResourceStatusReason'] = ''
-
+            event_details = {
+                'TimeStamp': event['Timestamp'],
+                'ResourceStatus': event['ResourceStatus'],
+                'ResourceType': event['ResourceType'],
+                'LogicalResourceId': event['LogicalResourceId'],
+                'ResourceStatusReason': event['ResourceStatusReason']
+                if 'ResourceStatusReason' in event
+                else '',
+            }
             events.append(event_details)
 
         return events
@@ -76,19 +73,14 @@ class CfnLogTools:
         :param logpath: Log file path
         :return:
         """
-        print("{}Collecting CloudFormation Logs".format(PrintMsg.INFO))
+        print(f"{PrintMsg.INFO}Collecting CloudFormation Logs")
+        extension = '.txt'
         for test in testdata_list:
             for stack in test.get_test_stacks():
                 stackinfo = CommonTools(stack['StackId']).parse_stack_info()
                 stackname = str(stackinfo['stack_name'])
                 region = str(stackinfo['region'])
-                extension = '.txt'
-                test_logpath = '{}/{}-{}-{}{}'.format(
-                    logpath,
-                    stackname,
-                    region,
-                    'cfnlogs',
-                    extension)
+                test_logpath = f'{logpath}/{stackname}-{region}-cfnlogs{extension}'
                 self.write_logs(str(stack['StackId']), test_logpath)
 
     def write_logs(self, stack_id, logpath):
@@ -106,14 +98,13 @@ class CfnLogTools:
         cfnlogs = self.get_cfnlogs(stackname, region)
 
         if len(cfnlogs) != 0:
-            if cfnlogs[0]['ResourceStatus'] != 'CREATE_COMPLETE':
-                if 'ResourceStatusReason' in cfnlogs[0]:
-                    reason = cfnlogs[0]['ResourceStatusReason']
-                else:
-                    reason = 'Unknown'
-            else:
+            if cfnlogs[0]['ResourceStatus'] == 'CREATE_COMPLETE':
                 reason = "Stack launch was successful"
 
+            elif 'ResourceStatusReason' in cfnlogs[0]:
+                reason = cfnlogs[0]['ResourceStatusReason']
+            else:
+                reason = 'Unknown'
             print("\t |StackName: " + stackname)
             print("\t |Region: " + region)
             print("\t |Logging to: " + logpath)
@@ -124,8 +115,8 @@ class CfnLogTools:
             print("==========================================================================================")
             with open(logpath, "a") as log_output:
                 log_output.write("-----------------------------------------------------------------------------\n")
-                log_output.write("Region: " + region + "\n")
-                log_output.write("StackName: " + stackname + "\n")
+                log_output.write(f"Region: {region}" + "\n")
+                log_output.write(f"StackName: {stackname}" + "\n")
                 log_output.write("*****************************************************************************\n")
                 log_output.write("ResourceStatusReason:  \n")
                 log_output.write(textwrap.fill(str(reason), 85) + "\n")

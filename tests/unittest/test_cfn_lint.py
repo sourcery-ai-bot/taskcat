@@ -114,7 +114,7 @@ def mkdir(path, ignore_exists=True):
 def flatten_rule(lints):
     for test in lints.keys():
         for result in lints[test]["results"].keys():
-            for i in range(0, len(lints[test]["results"][result])):
+            for i in range(len(lints[test]["results"][result])):
                 lints[test]["results"][result][i] = str(lints[test]["results"][result][i])
     return lints
 
@@ -125,19 +125,19 @@ class TestCfnLint(unittest.TestCase):
         base_path = "/tmp/lint_test/"
         mkdir(base_path)
         try:
+            template_path = "taskcat_test_template"
             for test_case in test_cases:
                 qs_path = base_path + test_case["config"]["global"]["qsname"] + "/"
                 mkdir(qs_path)
-                mkdir(qs_path + 'ci')
-                mkdir(qs_path + 'templates')
+                mkdir(f'{qs_path}ci')
+                mkdir(f'{qs_path}templates')
                 os.chdir(qs_path)
-                template_path = "taskcat_test_template"
-                config_path = "./ci/taskcat_test_config"
                 for test in test_case['config']["tests"].keys():
-                    template_file = template_path + "_" + test
+                    template_file = f"{template_path}_{test}"
                     test_case['config']["tests"][test]["template_file"] = template_file
-                    with open("./templates/" + template_file, 'w') as f:
+                    with open(f"./templates/{template_file}", 'w') as f:
                         f.write(test_case["templates"][test])
+                config_path = "./ci/taskcat_test_config"
                 with open(config_path, 'w') as f:
                     f.write(yaml.safe_dump(test_case['config']))
                 with captured_output() as (out, err):

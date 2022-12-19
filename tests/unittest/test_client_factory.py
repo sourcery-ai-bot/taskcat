@@ -26,7 +26,6 @@ class MockClientConfig(object):
 class MockBotoClient(object):
     def __init__(self):
         self.session = MockBotoSession()
-        pass
 
     def client(self, service, region_name=None, access_key=None, secret_key=None, session_token=None, s3v4=True):
         return MockClient()
@@ -59,7 +58,6 @@ class MockCredentials(object):
 class MockClient(object):
     def __init__(self):
         self._client_config = MockClientConfig()
-        pass
 
 
 def client_factory_instance():

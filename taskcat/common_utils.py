@@ -19,11 +19,7 @@ class CommonTools:
 
         :return: Matching String if found, otherwise return 'Not-found'
         """
-        sg = re_object.search(data_line)
-        if sg:
-            return str(sg.group())
-        else:
-            return str('Not-found')
+        return str(sg.group()) if (sg := re_object.search(data_line)) else 'Not-found'
 
     def parse_stack_info(self):
         """
@@ -32,10 +28,9 @@ class CommonTools:
         :return: Dictionary object containing the region and stack name
 
         """
-        stack_info = dict()
         region_re = re.compile('(?<=:)(.\w-.+(\w*)-\d)(?=:)')
         stack_name_re = re.compile('(?<=:stack/)(tCaT.*.)(?=/)')
-        stack_info['region'] = self.regxfind(region_re, self.stack_name)
+        stack_info = {'region': self.regxfind(region_re, self.stack_name)}
         stack_info['stack_name'] = self.regxfind(stack_name_re, self.stack_name)
         return stack_info
 
@@ -70,7 +65,8 @@ def param_list_to_dict(original_keys):
             raise TaskCatException('Invalid parameter %s parameters must be of type dict ("{}")' % param_dict)
         if 'ParameterKey' not in param_dict or 'ParameterValue' not in param_dict:
             raise TaskCatException(
-                'Invalid parameter %s all items must have both ParameterKey and ParameterValue keys' % param_dict)
+                f'Invalid parameter {param_dict} all items must have both ParameterKey and ParameterValue keys'
+            )
         key = param_dict['ParameterKey']
         param_index[key] = idx
     return param_index

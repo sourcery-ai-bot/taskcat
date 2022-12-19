@@ -101,7 +101,7 @@ def buildmap(start_location, map_string, partial_match=True):
         list of file paths containing the given value.
     """
     if not partial_match:
-        map_string = "{}/".format(map_string)
+        map_string = f"{map_string}/"
     fs_map = []
     for fs_path, dirs, filelist in os.walk(start_location, topdown=False):
         for fs_file in filelist:
@@ -230,7 +230,7 @@ class TaskCat(object):
         if os.path.isfile(config_yml):
             self.config = config_yml
         else:
-            print("Cannot locate file %s" % config_yml)
+            print(f"Cannot locate file {config_yml}")
             exit(1)
 
     def get_config(self):
@@ -277,22 +277,26 @@ class TaskCat(object):
         # Github/issue/57
         # Look for ~/.taskcat_overrides.json
 
-        print(PrintMsg.INFO + "|Processing Overrides")
+        print(f"{PrintMsg.INFO}|Processing Overrides")
         # Fetch overrides Home dir first.
         dict_squash_list = []
-        _homedir_override_file_path = "{}/.aws/{}".format(os.path.expanduser('~'), 'taskcat_global_override.json')
+        _homedir_override_file_path = (
+            f"{os.path.expanduser('~')}/.aws/taskcat_global_override.json"
+        )
         if os.path.isfile(_homedir_override_file_path):
             with open(_homedir_override_file_path) as f:
                 try:
                     _homedir_override_json = json.loads(f.read())
                 except ValueError:
                     raise TaskCatException("Unable to parse JSON (taskcat global overrides)")
-                print(PrintMsg.DEBUG + "Values loaded from ~/.aws/taskcat_global_override.json")
+                print(
+                    f"{PrintMsg.DEBUG}Values loaded from ~/.aws/taskcat_global_override.json"
+                )
                 print(PrintMsg.DEBUG + str(_homedir_override_json))
             dict_squash_list.append(_homedir_override_json)
 
         # Now look for per-project override uploaded to S3.
-        override_file_key = "{}/ci/taskcat_project_override.json".format(self.project)
+        override_file_key = f"{self.project}/ci/taskcat_project_override.json"
         try:
             # Intentional duplication of self.get_content() here, as I don't want to break that due to
             # tweaks necessary here.
@@ -301,7 +305,9 @@ class TaskCat(object):
             content = dict_object['Body'].read().decode('utf-8').strip()
             _obj = json.loads(content)
             dict_squash_list.append(_obj)
-            print(PrintMsg.DEBUG + "Values loaded from {}/ci/taskcat_project_override.json".format(self.project))
+            print(
+                f"{PrintMsg.DEBUG}Values loaded from {self.project}/ci/taskcat_project_override.json"
+            )
             print(PrintMsg.DEBUG + str(_obj))
         except ValueError:
             raise TaskCatException("Unable to parse JSON (taskcat project overrides)")
@@ -323,21 +329,22 @@ class TaskCat(object):
                 elif key in template_params:
                     original_keys.append(override_pd)
                 else:
-                    print(PrintMsg.INFO + "Cannot override [{}]! It's not present within the template!".format(key))
+                    print(
+                        f"{PrintMsg.INFO}Cannot override [{key}]! It's not present within the template!"
+                    )
 
         # check if s3 bucket and QSS3BucketName param match. fix if they dont.
         bucket_name = self.get_s3bucket()
         _kn = 'QSS3BucketName'
-        if _kn in self.extract_template_parameters():
-            if _kn in param_index:
-                _knidx = param_index[_kn]
-                param_bucket_name = original_keys[_knidx]['ParameterValue']
-                if param_bucket_name != bucket_name and param_bucket_name != '$[taskcat_autobucket]':
-                    print(
-                        PrintMsg.INFO + "Inconsistency detected between S3 Bucket Name provided in the TaskCat Config [{}] and QSS3BucketName Parameter Value within the template: [{}]".format(
-                            bucket_name, param_bucket_name))
-                    print(PrintMsg.INFO + "Setting the value of QSS3BucketName to [{}]".format(bucket_name))
-                    original_keys[_knidx]['ParameterValue'] = bucket_name
+        if _kn in self.extract_template_parameters() and _kn in param_index:
+            _knidx = param_index[_kn]
+            param_bucket_name = original_keys[_knidx]['ParameterValue']
+            if param_bucket_name not in [bucket_name, '$[taskcat_autobucket]']:
+                print(
+                    f"{PrintMsg.INFO}Inconsistency detected between S3 Bucket Name provided in the TaskCat Config [{bucket_name}] and QSS3BucketName Parameter Value within the template: [{param_bucket_name}]"
+                )
+                print(f"{PrintMsg.INFO}Setting the value of QSS3BucketName to [{bucket_name}]")
+                original_keys[_knidx]['ParameterValue'] = bucket_name
 
         return original_keys
 
@@ -369,9 +376,7 @@ class TaskCat(object):
         return self.test_region
 
     def set_test_region(self, region_list):
-        self.test_region = []
-        for region in region_list:
-            self.test_region.append(region)
+        self.test_region = list(region_list)
 
     def set_docleanup(self, cleanup_value):
         self.run_cleanup = cleanup_value
@@ -403,38 +408,42 @@ class TaskCat(object):
         if 's3bucket' in taskcat_cfg['global'].keys():
             self.set_s3bucket(taskcat_cfg['global']['s3bucket'])
             self.set_s3bucket_type('defined')
-            print(PrintMsg.INFO + "Staging Bucket => " + self.get_s3bucket())
+            print(f"{PrintMsg.INFO}Staging Bucket => {self.get_s3bucket()}")
             if len(self.get_s3bucket()) > self._max_bucket_name_length:
                 raise TaskCatException("The bucket name you provided is greater than 63 characters.")
             try:
                 _ = s3_client.list_objects(Bucket=self.get_s3bucket())
             except s3_client.exceptions.NoSuchBucket:
-                raise TaskCatException("The bucket you provided [{}] does not exist. Exiting.".format(self.get_s3bucket()))
+                raise TaskCatException(
+                    f"The bucket you provided [{self.get_s3bucket()}] does not exist. Exiting."
+                )
             except Exception:
                 raise
         else:
-            auto_bucket = 'taskcat-' + self.stack_prefix + '-' + self.get_project() + "-" + jobid[:8]
+            auto_bucket = f'taskcat-{self.stack_prefix}-{self.get_project()}-{jobid[:8]}'
             auto_bucket = auto_bucket.lower()
             if len(auto_bucket) > self._max_bucket_name_length:
                 auto_bucket = auto_bucket[:self._max_bucket_name_length]
-            if self.get_default_region():
-                print('{0}Creating bucket {1} in {2}'.format(PrintMsg.INFO, auto_bucket, self.get_default_region()))
-                if self.get_default_region() == 'us-east-1':
-                    response = s3_client.create_bucket(ACL=bucket_or_object_acl,
-                                                       Bucket=auto_bucket)
-                else:
-                    response = s3_client.create_bucket(ACL=bucket_or_object_acl,
-                                                       Bucket=auto_bucket,
-                                                       CreateBucketConfiguration={
-                                                           'LocationConstraint': self.get_default_region()
-                                                       })
+            if not self.get_default_region():
+                raise TaskCatException(f"Default_region = {self.get_default_region()}")
 
-                self.set_s3bucket_type('auto')
-            else:
-                raise TaskCatException("Default_region = " + self.get_default_region())
-
+            print('{0}Creating bucket {1} in {2}'.format(PrintMsg.INFO, auto_bucket, self.get_default_region()))
+            response = (
+                s3_client.create_bucket(
+                    ACL=bucket_or_object_acl, Bucket=auto_bucket
+                )
+                if self.get_default_region() == 'us-east-1'
+                else s3_client.create_bucket(
+                    ACL=bucket_or_object_acl,
+                    Bucket=auto_bucket,
+                    CreateBucketConfiguration={
+                        'LocationConstraint': self.get_default_region()
+                    },
+                )
+            )
+            self.set_s3bucket_type('auto')
             if response['ResponseMetadata']['HTTPStatusCode'] is 200:
-                print(PrintMsg.INFO + "Staging Bucket => [%s]" % auto_bucket)
+                print(f"{PrintMsg.INFO}Staging Bucket => [{auto_bucket}]")
                 self.set_s3bucket(auto_bucket)
             else:
                 print('{0}Creating bucket {1} in {2}'.format(PrintMsg.INFO, auto_bucket, self.get_default_region()))
@@ -444,7 +453,7 @@ class TaskCat(object):
                                                        'LocationConstraint': self.get_default_region()})
 
                 if response['ResponseMetadata']['HTTPStatusCode'] is 200:
-                    print(PrintMsg.INFO + "Staging Bucket => [%s]" % auto_bucket)
+                    print(f"{PrintMsg.INFO}Staging Bucket => [{auto_bucket}]")
                     self.set_s3bucket(auto_bucket)
             if self.tags:
                 s3_client.put_bucket_tagging(
@@ -453,7 +462,7 @@ class TaskCat(object):
                 )
 
         if os.path.isdir(self.get_project()):
-            start_location = "{}/{}".format(".", self.get_project())
+            start_location = f"./{self.get_project()}"
         else:
             print('''\t\t Hint: The name specfied as value of qsname ({})
                     must match the root directory of your project'''.format(self.get_project()))
@@ -461,7 +470,7 @@ class TaskCat(object):
             raise TaskCatException("Please cd to where you project is located")
 
         S3Sync(s3_client, self.get_s3bucket(), self.get_project(), start_location, bucket_or_object_acl)
-        self.s3_url_prefix = "https://" + self.get_s3_hostname() + "/" + self.get_project()
+        self.s3_url_prefix = f"https://{self.get_s3_hostname()}/{self.get_project()}"
         if self.upload_only:
             exit0("Upload completed successfully")
 
@@ -475,20 +484,17 @@ class TaskCat(object):
         :return: List of availability zones in a given region
 
         """
-        available_azs = []
         ec2_client = self._boto_client.get('ec2', region=region)
         availability_zones = ec2_client.describe_availability_zones(
             Filters=[{'Name': 'state', 'Values': ['available']}])
 
-        for az in availability_zones['AvailabilityZones']:
-            available_azs.append(az['ZoneName'])
-
-        if len(available_azs) < count:
-            print("{0}!Only {1} az's are available in {2}".format(PrintMsg.ERROR, len(available_azs), region))
-            quit(1)
-        else:
-            azs = ','.join(available_azs[:count])
-            return azs
+        available_azs = [
+            az['ZoneName'] for az in availability_zones['AvailabilityZones']
+        ]
+        if len(available_azs) >= count:
+            return ','.join(available_azs[:count])
+        print("{0}!Only {1} az's are available in {2}".format(PrintMsg.ERROR, len(available_azs), region))
+        quit(1)
 
     def get_content(self, bucket, object_key):
         """
@@ -506,10 +512,11 @@ class TaskCat(object):
         except TaskCatException:
             raise
         except Exception:
-            print("{} Attempted to fetch Bucket: {}, Key: {}".format(PrintMsg.ERROR, bucket, object_key))
+            print(
+                f"{PrintMsg.ERROR} Attempted to fetch Bucket: {bucket}, Key: {object_key}"
+            )
             raise
-        content = dict_object['Body'].read().decode('utf-8').strip()
-        return content
+        return dict_object['Body'].read().decode('utf-8').strip()
 
     def get_s3contents(self, url):
         """
@@ -545,12 +552,15 @@ class TaskCat(object):
         """
         s3_client = self._boto_client.get('s3', region=self.get_default_region(), s3v4=True)
         bucket_location = s3_client.get_bucket_location(Bucket=self.get_s3bucket())
-        if bucket_location['LocationConstraint'] is not None:
-            hostname = "s3-{0}.{1}/{2}".format(bucket_location['LocationConstraint'], "amazonaws.com",
-                                               self.get_s3bucket())
-        else:
-            hostname = "{0}.s3.amazonaws.com".format(self.get_s3bucket())
-        return hostname
+        return (
+            "s3-{0}.{1}/{2}".format(
+                bucket_location['LocationConstraint'],
+                "amazonaws.com",
+                self.get_s3bucket(),
+            )
+            if bucket_location['LocationConstraint'] is not None
+            else "{0}.s3.amazonaws.com".format(self.get_s3bucket())
+        )
 
     def get_global_region(self, yamlcfg):
         """
@@ -566,12 +576,11 @@ class TaskCat(object):
                 namespace = 'global'
                 try:
                     iter(yamlcfg['global']['regions'])
-                    for region in yamlcfg['global']['regions']:
-                        g_regions.append(region)
-                        self._use_global = True
+                    self._use_global = True
+                    g_regions.extend(iter(yamlcfg['global']['regions']))
                 except TypeError as e:
-                    print(PrintMsg.ERROR + "No regions defined in [%s]:" % namespace)
-                    print(PrintMsg.ERROR + "Please correct region defs[%s]:" % namespace)
+                    print(f"{PrintMsg.ERROR}No regions defined in [{namespace}]:")
+                    print(f"{PrintMsg.ERROR}Please correct region defs[{namespace}]:")
         return g_regions
 
     def extract_template_parameters(self):
@@ -594,34 +603,37 @@ class TaskCat(object):
         # Load global regions
         self.set_test_region(self.get_global_region(taskcat_cfg))
         for test in test_list:
-            print(self.nametag + " :Validate Template in test[%s]" % test)
+            print(f"{self.nametag} :Validate Template in test[{test}]")
             self.define_tests(taskcat_cfg, test)
             try:
                 if self.verbose:
-                    print(PrintMsg.DEBUG + "Default region [%s]" % self.get_default_region())
+                    print(f"{PrintMsg.DEBUG}Default region [{self.get_default_region()}]")
                 cfn = self._boto_client.get('cloudformation', region=self.get_default_region())
 
-                result = cfn.validate_template(TemplateURL=self.s3_url_prefix + '/templates/' + self.get_template_file())
-                print(PrintMsg.PASS + "Validated [%s]" % self.get_template_file())
+                result = cfn.validate_template(
+                    TemplateURL=f'{self.s3_url_prefix}/templates/{self.get_template_file()}'
+                )
+                print(f"{PrintMsg.PASS}Validated [{self.get_template_file()}]")
                 if 'Description' in result:
                     cfn_result = (result['Description'])
-                    print(PrintMsg.INFO + "Description  [%s]" % textwrap.fill(cfn_result))
+                    print(f"{PrintMsg.INFO}Description  [{textwrap.fill(cfn_result)}]")
                 else:
                     print(
-                        PrintMsg.INFO + "Please include a top-level description for template: [%s]" % self.get_template_file())
+                        f"{PrintMsg.INFO}Please include a top-level description for template: [{self.get_template_file()}]"
+                    )
                 if self.verbose:
                     cfn_params = json.dumps(result['Parameters'], indent=11, separators=(',', ': '))
-                    print(PrintMsg.DEBUG + "Parameters:")
+                    print(f"{PrintMsg.DEBUG}Parameters:")
                     print(cfn_params)
             except TaskCatException:
                 raise
             except Exception as e:
                 if self.verbose:
                     print(PrintMsg.DEBUG + str(e))
-                print(PrintMsg.FAIL + "Cannot validate %s" % self.get_template_file())
-                print(PrintMsg.INFO + "Deleting any automatically-created buckets...")
+                print(f"{PrintMsg.FAIL}Cannot validate {self.get_template_file()}")
+                print(f"{PrintMsg.INFO}Deleting any automatically-created buckets...")
                 self.delete_autobucket()
-                raise TaskCatException("Cannot validate %s" % self.get_template_file())
+                raise TaskCatException(f"Cannot validate {self.get_template_file()}")
         print('\n')
         return True
 
@@ -635,7 +647,7 @@ class TaskCat(object):
         :return: Password of given length and type
         """
         if self.verbose:
-            print(PrintMsg.DEBUG + "Auto generating password")
+            print(f"{PrintMsg.DEBUG}Auto generating password")
             print(PrintMsg.DEBUG + "Pass size => {0}".format(pass_length))
 
         password = []
@@ -650,19 +662,24 @@ class TaskCat(object):
             print(PrintMsg.DEBUG + "Pass type => {0}".format('alpha-numeric'))
 
             while len(password) < pass_length:
-                password.append(random.choice(lowercase))
-                password.append(random.choice(uppercase))
-                password.append(random.choice(numbers))
-
-        # Generates password string with:
-        # lowercase,uppercase, numbers and special chars
+                password.extend(
+                    (
+                        random.choice(lowercase),
+                        random.choice(uppercase),
+                        random.choice(numbers),
+                    )
+                )
         elif pass_type == 'S':
             print(PrintMsg.DEBUG + "Pass type => {0}".format('specialchars'))
             while len(password) < pass_length:
-                password.append(random.choice(lowercase))
-                password.append(random.choice(uppercase))
-                password.append(random.choice(numbers))
-                password.append(random.choice(specialchars))
+                password.extend(
+                    (
+                        random.choice(lowercase),
+                        random.choice(uppercase),
+                        random.choice(numbers),
+                        random.choice(specialchars),
+                    )
+                )
         else:
             # If no passtype is defined (None)
             # Defaults to alpha-numeric
@@ -670,24 +687,25 @@ class TaskCat(object):
             # lowercase,uppercase, numbers and special chars
             print(PrintMsg.DEBUG + "Pass type => default {0}".format('alpha-numeric'))
             while len(password) < pass_length:
-                password.append(random.choice(lowercase))
-                password.append(random.choice(uppercase))
-                password.append(random.choice(numbers))
-
+                password.extend(
+                    (
+                        random.choice(lowercase),
+                        random.choice(uppercase),
+                        random.choice(numbers),
+                    )
+                )
         return ''.join(password)
 
     def generate_random(self, gtype, length):
         random_string = []
         numbers = "1234567890"
-        lowercase = "abcdefghijklmnopqrstuvwxyz"
         if gtype == 'alpha':
             print(PrintMsg.DEBUG + "Random String => {0}".format('alpha'))
 
+            lowercase = "abcdefghijklmnopqrstuvwxyz"
             while len(random_string) < length:
                 random_string.append(random.choice(lowercase))
 
-        # Generates password string with:
-        # lowercase,uppercase, numbers and special chars
         elif gtype == 'number':
             print(PrintMsg.DEBUG + "Random String => {0}".format('numeric'))
             while len(random_string) < length:
@@ -696,10 +714,7 @@ class TaskCat(object):
         return ''.join(random_string)
 
     def generate_uuid(self, uuid_type):
-        if uuid_type is 'A':
-            return str(uuid.uuid4())
-        else:
-            return str(uuid.uuid4())
+        return str(uuid.uuid4())
 
     def generate_input_param_values(self, s_parms, region):
         """

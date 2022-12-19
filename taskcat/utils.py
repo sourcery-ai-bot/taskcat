@@ -238,6 +238,7 @@ class CFNYAMLHandler(object):
 
     @staticmethod
     def ordered_safe_dump(data, stream=None, **kwds):
+
         class OrderedSafeDumper(yaml.SafeDumper):
             pass
 
@@ -246,7 +247,7 @@ class CFNYAMLHandler(object):
 
         def _str_representer(dumper, _data):
             if re.match('!\w+\s+\|.+', _data):
-                tag = re.search('^!\w+', _data).group(0)
+                tag = re.search('^!\w+', _data)[0]
                 return dumper.represent_scalar(str(tag), _data.split('|', 1)[1].lstrip(), style='|')
             elif len(_data.splitlines()) > 1:
                 return dumper.represent_scalar('tag:yaml.org,2002:str', _data, style='|')
@@ -263,7 +264,7 @@ class CFNYAMLHandler(object):
         # CloudFormation !Tag quote/colon cleanup
         keyword = re.search('\'!.*\':?', yaml_dump)
         while keyword:
-            yaml_dump = re.sub(re.escape(keyword.group(0)), keyword.group(0).strip('\'":'), yaml_dump)
+            yaml_dump = re.sub(re.escape(keyword[0]), keyword[0].strip('\'":'), yaml_dump)
             keyword = re.search('\'!.*\':?', yaml_dump)
 
         return yaml_dump
@@ -274,12 +275,13 @@ class CFNYAMLHandler(object):
             directory = os.path.split(directory)[0]
         if not os.path.isdir(directory):
             # TODO: FIX LOG LINE
-            print("[INFO]: Directory [{}] does not exist. Trying to create it.".format(directory))
+            print(f"[INFO]: Directory [{directory}] does not exist. Trying to create it.")
             # logger.info("[INFO]: Directory [{}] does not exist. Trying to create it.".format(directory))
             os.makedirs(directory)
         elif not os.access(directory, os.W_OK):
-            pass
             # TODO: FIX LOG LINE AND EXITING. REMOVE PASS ABOVE.
-            print("[ERROR]: No write access allowed to output directory [{}]. Aborting.".format(directory))
+            print(
+                f"[ERROR]: No write access allowed to output directory [{directory}]. Aborting."
+            )
             # logger.error("[ERROR]: No write access allowed to output directory [{}]. Aborting.".format(directory))
             sys.exit(1)

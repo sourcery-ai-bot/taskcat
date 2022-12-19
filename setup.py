@@ -8,8 +8,7 @@ with open('requirements.txt') as f:
 
 def test_suite():
     test_loader = unittest.TestLoader()
-    test_suite = test_loader.discover('tests/unittest', pattern='test_*.py')
-    return test_suite
+    return test_loader.discover('tests/unittest', pattern='test_*.py')
 
 setup(
     name='taskcat',

@@ -106,14 +106,13 @@ class TestCfnLogTools(unittest.TestCase):
         cfn_logutils = cfn_logutils_instance()
 
         msg = "should write the expected output to a file"
-        path = "/tmp/taskcat_test_write_logs_" + str(random.randrange(1, 1000000000000000))
+        path = f"/tmp/taskcat_test_write_logs_{random.randrange(1, 1000000000000000)}"
         with mock.patch("taskcat.cfn_logutils.CfnLogTools.get_cfnlogs", mock_get_cfnlogs):
             with mock.patch("taskcat.common_utils.CommonTools.parse_stack_info", mock_parse_stack_info):
                 with mock.patch("taskcat.cfn_resources.CfnResourceTools.get_resources", mock_get_resources):
                     cfn_logutils.write_logs("test_stack", path)
-        f = open(path, 'r')
-        actual = f.read()
-        f.close()
+        with open(path, 'r') as f:
+            actual = f.read()
         expected = [
             '-----------------------------------------------------------------------------\n'
             'Region: us-east-1\n'

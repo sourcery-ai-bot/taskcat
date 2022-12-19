@@ -92,7 +92,7 @@ class ClientFactory(object):
                 self.logger.warning("Region not set in credential chain, defaulting to us-east-1")
                 region = 'us-east-1'
         except Exception as e:
-            self.logger.error('failed to get default region: %s' % str(e))
+            self.logger.error(f'failed to get default region: {str(e)}')
             region = 'us-east-1'
         finally:
             return region
@@ -108,7 +108,7 @@ class ClientFactory(object):
         """
         if (aws_access_key_id and not aws_secret_access_key) or (not aws_access_key_id and aws_secret_access_key):
             raise ValueError('"aws_access_key_id" and "aws_secret_access_key" must both be set')
-        elif profile_name and (aws_access_key_id or aws_secret_access_key or aws_session_token):
+        elif profile_name and (aws_access_key_id or aws_session_token):
             raise ValueError(
                 '"profile_name" cannot be used with aws_access_key_id, aws_secret_access_key or aws_session_token')
         self._credential_sets[credential_set_name] = [aws_access_key_id, aws_secret_access_key, aws_session_token,
@@ -135,22 +135,29 @@ class ClientFactory(object):
         """
         if not aws_access_key_id and not profile_name:
             self.logger.debug(
-                "no explicit keys or profile for this client, fetching the credentials from the %s set" % credential_set
+                f"no explicit keys or profile for this client, fetching the credentials from the {credential_set} set"
             )
             if credential_set not in self._credential_sets.keys():
-                raise KeyError('credential set %s does not exist' % credential_set)
+                raise KeyError(f'credential set {credential_set} does not exist')
             aws_access_key_id, aws_secret_access_key, aws_session_token, profile_name = self._credential_sets[
                 credential_set]
         if not region:
             region = self.get_default_region(aws_access_key_id, aws_secret_access_key, aws_session_token, profile_name)
         s3v4 = 's3v4' if s3v4 else 'default_sig_version'
         try:
-            self.logger.debug("Trying to get [%s][%s][%s][%s]" % (credential_set, region, service, s3v4))
+            self.logger.debug(
+                f"Trying to get [{credential_set}][{region}][{service}][{s3v4}]"
+            )
             client = self._clients[credential_set][region][service][s3v4]
-            if aws_access_key_id:
-                if self._clients[credential_set][region]['session'].get_credentials().access_key != aws_access_key_id:
-                    self.logger.debug("credentials changed, forcing update...")
-                    raise KeyError("New credentials for this credential_set, need a new session.")
+            if (
+                aws_access_key_id
+                and self._clients[credential_set][region]['session']
+                .get_credentials()
+                .access_key
+                != aws_access_key_id
+            ):
+                self.logger.debug("credentials changed, forcing update...")
+                raise KeyError("New credentials for this credential_set, need a new session.")
             return client
         except KeyError:
             self.logger.debug("Couldn't return an existing client, making a new one...")

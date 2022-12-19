@@ -46,7 +46,7 @@ class S3Sync(object):
 
         """
         if prefix != "" and not prefix.endswith('/'):
-            prefix = prefix + '/'
+            prefix = f'{prefix}/'
         self.s3_client = s3_client
         fl = self._get_local_file_list(path)
         s3fl = self._get_s3_file_list(bucket, prefix)
@@ -60,17 +60,17 @@ class S3Sync(object):
 
         with open(file_path, 'rb') as fp:
             while True:
-                data = fp.read(chunk_size)
-                if not data:
-                    break
-                md5s.append(hashlib.md5(data))
+                if data := fp.read(chunk_size):
+                    md5s.append(hashlib.md5(data))
 
+                else:
+                    break
         if len(md5s) == 1:
-            return '"{}"'.format(md5s[0].hexdigest())
+            return f'"{md5s[0].hexdigest()}"'
 
         digests = b''.join(m.digest() for m in md5s)
         digests_md5 = hashlib.md5(digests)
-        return '"{}-{}"'.format(digests_md5.hexdigest(), len(md5s))
+        return f'"{digests_md5.hexdigest()}-{len(md5s)}"'
 
     def _get_local_file_list(self, path, include_checksums=True):
         file_list = {}
@@ -78,31 +78,17 @@ class S3Sync(object):
         path = os.path.abspath(os.path.expanduser(path))
         # recurse through directories
         for root, dirs, files in os.walk(path):
-            relpath = os.path.relpath(root, path) + "/"
-            exclude_path = False
+            relpath = f"{os.path.relpath(root, path)}/"
             # relative path should be blank if there are no sub directories
             if relpath == './':
                 relpath = ""
-            # exclude defined paths
-            for p in S3Sync.exclude_path_prefixes:
-                if relpath.startswith(p):
-                    exclude_path = True
-                    break
+            exclude_path = any(relpath.startswith(p) for p in S3Sync.exclude_path_prefixes)
             if not exclude_path:
                 for file in files:
-                    exclude = False
-                    # exclude defined filename patterns
-                    for p in S3Sync.exclude_files:
-                        if fnmatch.fnmatch(file, p):
-                            exclude = True
-                            break
+                    exclude = any(fnmatch.fnmatch(file, p) for p in S3Sync.exclude_files)
                     if not exclude:
-                        full_path = root + "/" + file
-                        if include_checksums:
-                            # get checksum
-                            checksum = self._hash_file(full_path)
-                        else:
-                            checksum = ""
+                        full_path = f"{root}/{file}"
+                        checksum = self._hash_file(full_path) if include_checksums else ""
                         file_list[relpath + file] = [full_path, checksum]
         return file_list
 
@@ -113,11 +99,15 @@ class S3Sync(object):
         # While there are more results, fetch them from S3
         while is_paginated:
             # if there's no token, this is the initial list_objects call
-            if not continuation_token:
-                resp = self.s3_client.list_objects_v2(Bucket=bucket, Prefix=prefix)
-            # this is a query to get additional pages, add continuation token to get next page
-            else:
-                resp = self.s3_client.list_objects_v2(Bucket=bucket, Prefix=prefix, ContinuationToken=continuation_token)
+            resp = (
+                self.s3_client.list_objects_v2(
+                    Bucket=bucket,
+                    Prefix=prefix,
+                    ContinuationToken=continuation_token,
+                )
+                if continuation_token
+                else self.s3_client.list_objects_v2(Bucket=bucket, Prefix=prefix)
+            )
             if 'Contents' in resp:
                 for file in resp['Contents']:
                     # strip the prefix from the path
@@ -132,26 +122,26 @@ class S3Sync(object):
 
     @staticmethod
     def _exclude_remote(path):
-        keep = False
-        for exclude in S3Sync.exclude_remote_path_prefixes:
-            if path.startswith(exclude):
-                keep = True
-                break
-        return keep
+        return any(
+            path.startswith(exclude)
+            for exclude in S3Sync.exclude_remote_path_prefixes
+        )
 
     def _sync(self, local_list, s3_list, bucket, prefix, acl, threads=16):
         # determine which files to remove from S3
         remove_from_s3 = []
         for s3_file in s3_list.keys():
             if s3_file not in local_list.keys() and not self._exclude_remote(s3_file):
-                print("{}[S3: DELETE ]{} s3://{}/{}".format(PrintMsg.white, PrintMsg.rst_color, bucket, prefix + prefix + s3_file))
+                print(
+                    f"{PrintMsg.white}[S3: DELETE ]{PrintMsg.rst_color} s3://{bucket}/{prefix + prefix + s3_file}"
+                )
                 remove_from_s3.append({"Key": prefix + s3_file})
         # deleting objects, max 1k objects per s3 delete_objects call
         for d in [remove_from_s3[i:i + 1000] for i in range(0, len(remove_from_s3), 1000)]:
             response = self.s3_client.delete_objects(Bucket=bucket, Delete={'Objects': d})
             if "Errors" in response.keys():
                 for error in response["Errors"]:
-                    print(PrintMsg.ERROR + "S3 delete error: %s" % str(error))
+                    print(f"{PrintMsg.ERROR}S3 delete error: {str(error)}")
                 raise TaskCatException("Failed to delete one or more files from S3")
         # build list of files to upload
         upload_to_s3 = []
@@ -179,13 +169,15 @@ class S3Sync(object):
         retry = 0
         # backoff and retry
         while retry < 5:
-            print("{}[S3: -> ]{} s3://{}/{}".format(PrintMsg.white, PrintMsg.rst_color, bucket, prefix + s3_path))
+            print(
+                f"{PrintMsg.white}[S3: -> ]{PrintMsg.rst_color} s3://{bucket}/{prefix + s3_path}"
+            )
             try:
                 s3_client.upload_file(local_filename, bucket, prefix + s3_path, ExtraArgs={'ACL': acl})
                 break
             except Exception as e:
                 retry += 1
-                print(PrintMsg.ERROR + "S3 upload error: %s" % e)
+                print(f"{PrintMsg.ERROR}S3 upload error: {e}")
                 # give up if we've exhausted retries, or if the error is not-retryable (ie AccessDenied)
                 if retry == 5 or (type(e) == S3UploadFailedError and '(AccessDenied)' in str(e)):
                     raise TaskCatException("Failed to upload to S3")
